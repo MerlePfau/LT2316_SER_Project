@@ -42,14 +42,15 @@ class LSTM_fixed_len(nn.Module) :
 
         self.lstm = nn.LSTM(input_size, hidden_dim, num_layers=n_layers, dropout=0.2, batch_first=True)
         self.linear = nn.Linear(hidden_dim, output_size)    
-        self.softmax = nn.LogSoftmax(dim=2)  
+        self.softmax = nn.LogSoftmax(dim=1)  
     
     def forward(self, x):#, device):
         lstm_out, (h, c) = self.lstm(x)    
         #lstm_out, h, c =  lstm_out.to(device), h.to(device), c.to(device)
         
-        output = self.linear(h[-1])
-        return output
+        last = self.linear(h[-1])
+        out = self.softmax(last)
+        return out
 
     
 class Trainer:
@@ -103,11 +104,11 @@ class Trainer:
     def train_model(self, model, x_train, y_train, x_val, y_val, hp, output_size, epochs=100):
         self.output_size = output_size
         m = model(input_size=x_train.shape[2], hidden_dim=hp["hidden_size"], output_size=self.output_size, n_layers=hp["number_layers"])
-        m = m.to(self.device)
+        #m = m.to(self.device)
         model_name=hp["model"]
         batch_size=hp['batch_size']
         lr=hp["learning_rate"]
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.NLLLoss()
         optimizer = optim.Adam(m.parameters(), lr=lr)
         b = Batcher(x_train, torch.LongTensor(y_train), batch_size, max_iter=epochs)
         e = 0
@@ -134,8 +135,8 @@ class Trainer:
                     labels = y
                     for i in range(predictions.shape[0]):
                         label = labels[i]
-                        prediction = tf.argmax(input=predictions[i].tolist())
-                        y_true.append(label)
+                        prediction = int(torch.argmax(input=predictions[i]))
+                        y_true.append(int(label))
                         y_pred.append(prediction)
             scores = {}
             f = f1_score(y_true, y_pred, average='weighted')
@@ -152,7 +153,7 @@ class Trainer:
         
         m = model_class(x_test.shape[2], trained_hidden_dim, self.output_size, n_layers=trained_num_lay)
         m.load_state_dict(model_state_dict)
-        m = m.to(self.device)
+        #m = m.to(self.device)
         m.eval()
         
         X = x_test
@@ -161,7 +162,7 @@ class Trainer:
         predictions = m(X.float())
         y_pred = []
         for i in range(predictions.shape[0]):
-            prediction = tf.argmax(input=predictions[i].tolist())
+            prediction = int(torch.argmax(input=predictions[i]))
             y_pred.append(prediction)
 
         return y_pred
