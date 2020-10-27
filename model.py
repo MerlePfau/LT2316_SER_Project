@@ -107,8 +107,8 @@ class Trainer:
             for X, y in split:
                 X = X.unsqueeze(dim=1)
                 optimizer.zero_grad()
-                o = m(X.float())#, device)
-                l = criterion(o, y)#.to(device)
+                o = m(X.float())
+                l = criterion(o, y)
                 tot_loss += l
                 l.backward()
                 optimizer.step()    
