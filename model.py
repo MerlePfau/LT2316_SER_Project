@@ -11,7 +11,6 @@ class Batcher:
     def __init__(self, X, y, batch_size=50, max_iter=None):
         self.X = X
         self.y = y
-        #self.device = device
         self.batch_size = batch_size
         self.max_iter = max_iter
         self.curr_iter = 0
@@ -22,7 +21,7 @@ class Batcher:
     def __next__(self):
         if self.curr_iter == self.max_iter:
             raise StopIteration
-        permutation = torch.randperm(self.X.shape[0])#, device=self.device)
+        permutation = torch.randperm(self.X.shape[0])
         permX = self.X[permutation]
         permy = self.y[permutation]
         splitX = torch.split(permX, self.batch_size)
@@ -39,14 +38,14 @@ class LSTM_fixed_len(nn.Module) :
         self.input_size = input_size
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-
+        
+        self.non_lin = nn.ReLU()
         self.lstm = nn.LSTM(input_size, hidden_dim, num_layers=n_layers, dropout=0.2, batch_first=True)
         self.linear = nn.Linear(hidden_dim, output_size)    
         self.softmax = nn.LogSoftmax(dim=1)  
     
-    def forward(self, x):#, device):
+    def forward(self, x):
         lstm_out, (h, c) = self.lstm(x)    
-        #lstm_out, h, c =  lstm_out.to(device), h.to(device), c.to(device)
         
         last = self.linear(h[-1])
         out = self.softmax(last)
@@ -54,7 +53,6 @@ class LSTM_fixed_len(nn.Module) :
 
     
 class Trainer:
-
     def __init__(self, device, dump_folder="/tmp/aa2_models/"):
         self.device = device
         self.dump_folder = dump_folder
@@ -62,13 +60,6 @@ class Trainer:
         
         
     def save_model(self, epoch, model, optimizer, batch_size, learning_rate, hidden, number_lay, loss, scores, model_name):
-        # epoch = epoch
-        # model =  a train pytroch model
-        # optimizer = a pytorch Optimizer
-        # loss = loss (detach it from GPU)
-        # scores = dict where keys are names of metrics and values the value for the metric
-        # hyperparamaters = dict of hyperparamaters
-        # model_name = name of the model
         save_dict = {
                         'epoch': epoch,
                         'model_state_dict': model.state_dict(),
@@ -85,7 +76,6 @@ class Trainer:
         torch.save(save_dict, os.path.join(self.dump_folder, model_name + ".pt"))
 
     def load_model(self, model_path):
-        # Finish this function so that it loads a model and return the appropriate variables
         checkpoint = torch.load(model_path)
         epoch = checkpoint['epoch']
         model_state_dict = checkpoint['model_state_dict']
@@ -103,8 +93,7 @@ class Trainer:
         
     def train_model(self, model, x_train, y_train, x_val, y_val, hp, output_size, epochs=100):
         self.output_size = output_size
-        m = model(input_size=x_train.shape[2], hidden_dim=hp["hidden_size"], output_size=self.output_size, n_layers=hp["number_layers"])
-        #m = m.to(self.device)
+        m = model(input_size=x_train.shape[1], hidden_dim=hp["hidden_size"], output_size=self.output_size, n_layers=hp["number_layers"])
         model_name=hp["model"]
         batch_size=hp['batch_size']
         lr=hp["learning_rate"]
@@ -116,7 +105,7 @@ class Trainer:
             m.train()
             tot_loss = 0
             for X, y in split:
-                #X = X.unsqueeze(dim=1)
+                X = X.unsqueeze(dim=1)
                 optimizer.zero_grad()
                 o = m(X.float())#, device)
                 l = criterion(o, y)#.to(device)
@@ -130,7 +119,7 @@ class Trainer:
             y_pred = []
             for split in bl:
                 for X, y in split:
-                    #X = X.unsqueeze(dim=1)
+                    X = X.unsqueeze(dim=1)
                     predictions = m(X.float())
                     labels = y
                     for i in range(predictions.shape[0]):
@@ -151,14 +140,13 @@ class Trainer:
     def predict(self, x_test, model_class, best_model_path):
         trained_epochs, model_state_dict, optimizer_state_dict, trained_batch_size, trained_learning_rate, trained_hidden_dim, trained_num_lay, trained_loss, trained_scores, model_name = self.load_model(best_model_path)
         
-        m = model_class(x_test.shape[2], trained_hidden_dim, self.output_size, n_layers=trained_num_lay)
+        m = model_class(x_test.shape[1], trained_hidden_dim, self.output_size, n_layers=trained_num_lay)
         m.load_state_dict(model_state_dict)
-        #m = m.to(self.device)
         m.eval()
         
         X = x_test
 
-        #X = x_test.unsqueeze(dim=1)
+        X = x_test.unsqueeze(dim=1)
         predictions = m(X.float())
         y_pred = []
         for i in range(predictions.shape[0]):
