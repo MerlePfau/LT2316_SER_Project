@@ -53,8 +53,7 @@ class LSTM_fixed_len(nn.Module) :
 
     
 class Trainer:
-    def __init__(self, device, dump_folder="/tmp/aa2_models/"):
-        self.device = device
+    def __init__(self, dump_folder="/tmp/aa2_models/", model=None):
         self.dump_folder = dump_folder
         os.makedirs(dump_folder, exist_ok=True)
         
@@ -91,10 +90,19 @@ class Trainer:
         return epoch, model_state_dict, optimizer_state_dict, batch_size, learning_rate, hidden, num_lay, loss, scores, model_name
     
         
-    def train_model(self, model, x_train, y_train, x_val, y_val, hp, output_size, epochs=100):
+    def train_model(self, model, x_train, y_train, x_val, y_val, hp, output_size, epochs=100, model_path=None):
         self.output_size = output_size
-        m = model(input_size=x_train.shape[1], hidden_dim=hp["hidden_size"], output_size=self.output_size, n_layers=hp["number_layers"])
-        model_name=hp["model"]
+        if model_path==None:
+            m = model(input_size=x_train.shape[1], hidden_dim=hp["hidden_size"], output_size=self.output_size, n_layers=hp["number_layers"])
+            model_name=hp["model"]
+            print("no old model found")
+            
+        else:
+            print("pretrained model found")
+            trained_epochs, model_state_dict, optimizer_state_dict, trained_batch_size, trained_learning_rate, trained_hidden_dim, trained_num_lay, trained_loss, trained_scores, model_name = self.load_model(model_path)
+            m = model(x_train.shape[1], trained_hidden_dim, 8, n_layers=trained_num_lay)
+            m.load_state_dict(model_state_dict)
+
         batch_size=hp['batch_size']
         lr=hp["learning_rate"]
         criterion = nn.NLLLoss()
@@ -140,12 +148,9 @@ class Trainer:
     def predict(self, x_test, model_class, best_model_path):
         trained_epochs, model_state_dict, optimizer_state_dict, trained_batch_size, trained_learning_rate, trained_hidden_dim, trained_num_lay, trained_loss, trained_scores, model_name = self.load_model(best_model_path)
         
-        m = model_class(x_test.shape[1], trained_hidden_dim, self.output_size, n_layers=trained_num_lay)
+        m = model_class(x_test.shape[1], trained_hidden_dim, 8, n_layers=trained_num_lay)
         m.load_state_dict(model_state_dict)
         m.eval()
-        
-        X = x_test
-
         X = x_test.unsqueeze(dim=1)
         predictions = m(X.float())
         y_pred = []
